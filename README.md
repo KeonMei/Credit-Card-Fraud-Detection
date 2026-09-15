@@ -1,2 +1,2 @@
-# Development-of-a-Machine-Learning-System-for-Credit-Card-Fraud-Detection-Using-Transaction-Data
-Diploma work
+# Credit Card Fraud Detection
+ML system for identifying fraudulent transactions from credit card transaction data.

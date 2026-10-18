@@ -64,6 +64,11 @@ Outputs in `artifacts/<dataset>/`: `metrics.csv` (val + test for every model), `
 `curves_test.png` (PR + ROC), confusion matrix and SHAP feature importance of the best model,
 `model.joblib` (feature builder + model + threshold).
 
+## Thesis experiments
+
+The full baseline comparison (5 classifiers x 4 balancing methods on ULB and IEEE-CIS, statistical tests,
+stacking, threshold analysis) is in [`experiments/`](experiments/README.md).
+
 ## Scoring new transactions
 
 ```bash

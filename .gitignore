@@ -6,3 +6,9 @@ __pycache__/
 # Kaggle data and training outputs are large — keep them out of git
 data/
 artifacts/
+
+# experiment intermediates
+experiments/cache/
+experiments/logs/
+experiments/results/*/*.pkl
+experiments/results/*/*.npz

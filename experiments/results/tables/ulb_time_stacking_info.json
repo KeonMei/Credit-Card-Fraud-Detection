@@ -1,0 +1,36 @@
+{
+  "best_config": [
+    "XGB",
+    "none"
+  ],
+  "base_models": [
+    [
+      "XGB",
+      "none"
+    ],
+    [
+      "LGBM",
+      "none"
+    ],
+    [
+      "RF",
+      "none"
+    ],
+    [
+      "MLP",
+      "none"
+    ]
+  ],
+  "alpha": 50.0,
+  "lam": 0.01,
+  "meta_weights": {
+    "XGB": 1.1456999778747559,
+    "LGBM": 1.1196000576019287,
+    "RF": 1.013200044631958,
+    "MLP": 0.7609999775886536
+  },
+  "meta_bias": -3.085888385772705,
+  "tau_stacking": 0.072,
+  "tau_average": 0.088,
+  "tau_best_single": 0.05
+}

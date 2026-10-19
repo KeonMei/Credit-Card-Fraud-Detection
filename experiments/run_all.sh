@@ -15,3 +15,4 @@ python3 analyze.py ieee_time 2000 > logs/analyze_ieee.log 2>&1
 python3 sensitivity.py ulb > logs/sensitivity_ulb.log 2>&1
 python3 sensitivity.py ieee > logs/sensitivity_ieee.log 2>&1
 python3 figures.py
+python3 make_tables.py

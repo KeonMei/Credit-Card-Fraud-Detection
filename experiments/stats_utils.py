@@ -65,11 +65,15 @@ def stratified_boot_indices(y, B=2000, seed=0):
 def _metric(name, y, p, thr):
     if name == "pr_auc":
         return average_precision_score(y, p)
-    yhat = (p >= thr).astype(int)
+    # confusion counts with numpy (same values as sklearn's fbeta_score / matthews_corrcoef, much faster)
+    yh = p >= thr
+    yb = y == 1
+    tp = float(np.sum(yh & yb)); fp = float(np.sum(yh & ~yb)); fn = float(np.sum(~yh & yb)); tn = float(len(y)) - tp - fp - fn
     if name == "f2":
-        return fbeta_score(y, yhat, beta=2, zero_division=0)
+        return 0.0 if tp == 0 else 5 * tp / (5 * tp + 4 * fn + fp)
     if name == "mcc":
-        return matthews_corrcoef(y, yhat)
+        den = np.sqrt((tp + fp) * (tp + fn) * (tn + fp) * (tn + fn))
+        return 0.0 if den == 0 else (tp * tn - fp * fn) / den
     raise ValueError(name)
 
 

@@ -1,0 +1,16 @@
+\begin{tabular}{lllccccc}
+\hline
+Data & Model & Protocol & PR-AUC & ROC-AUC & Precision & Recall & MCC \\
+\hline
+ULB & XGB+none & time split (main) & 0.804 & 0.991 & 0.965 & 0.743 & 0.847 \\
+ULB & XGB+none & stratified random split & 0.818 & 0.977 & 0.986 & 0.737 & 0.852 \\
+ULB & LR+none & time split (main) & 0.791 & 0.979 & 1.000 & 0.270 & 0.520 \\
+ULB & LR+none & stratified random split & 0.682 & 0.960 & 0.830 & 0.411 & 0.583 \\
+ULB & XGB & SMOTE before split (leaky) & 1.000 & 1.000 & 1.000 & 1.000 & 1.000 \\
+IEEE-CIS & LGBM+SMOTE & time split (main) & 0.633 & 0.925 & 0.877 & 0.425 & 0.602 \\
+IEEE-CIS & LGBM+SMOTE & stratified random split & 0.902 & 0.978 & 0.969 & 0.751 & 0.848 \\
+IEEE-CIS & LR+none & time split (main) & 0.361 & 0.816 & 0.767 & 0.181 & 0.364 \\
+IEEE-CIS & LR+none & stratified random split & 0.397 & 0.836 & 0.806 & 0.198 & 0.391 \\
+IEEE-CIS & LGBM & SMOTE before split (leaky) & 1.000 & 0.999 & 0.999 & 0.992 & 0.991 \\
+\hline
+\end{tabular}

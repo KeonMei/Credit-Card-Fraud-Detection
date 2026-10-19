@@ -36,10 +36,12 @@ for c, b in product(CLASSIFIERS, BALANCING):
         R[(c, b)] = pickle.load(open(f, "rb"))
 
 # ------------------------------------------------------------- main table
+for r in R.values():  # F2-optimal threshold on out-of-fold predictions (never on the test set)
+    r["tau"] = best_f2_threshold(y_tr[oof_mask], r["oof"][oof_mask])[0]
+main_f = tdir / f"{name}_main.csv"
 rows = []
-for (c, b), r in R.items():
-    tau, _ = best_f2_threshold(y_tr[oof_mask], r["oof"][oof_mask])
-    r["tau"] = tau
+for (c, b), r in ([] if main_f.exists() else R.items()):
+    tau = r["tau"]
     m05 = all_metrics(yte, r["test_pred"], 0.5)
     mt = all_metrics(yte, r["test_pred"], tau)
     ci = bootstrap_ci(yte, r["test_pred"], tau, metrics=("pr_auc",), B=B, seed=1)
@@ -49,8 +51,11 @@ for (c, b), r in R.items():
                      **{f"{k}_tau": v for k, v in mt.items() if k in ("precision", "recall", "f1", "f2", "mcc", "fpr", "tp", "fp", "fn", "tn")},
                      **{f"{k}_05": v for k, v in m05.items() if k in ("precision", "recall", "f1", "f2", "mcc", "fpr")},
                      fit_seconds=r["fit_seconds_full"], search_seconds=r["search_seconds"], params=json.dumps(r["params"])))
-main = pd.DataFrame(rows).sort_values("cv_pr_auc_mean", ascending=False).reset_index(drop=True)
-main.to_csv(tdir / f"{name}_main.csv", index=False)
+if main_f.exists():  # bootstrap-heavy sections are reused when the analysis is restarted
+    main = pd.read_csv(main_f)
+else:
+    main = pd.DataFrame(rows).sort_values("cv_pr_auc_mean", ascending=False).reset_index(drop=True)
+    main.to_csv(main_f, index=False)
 print(main[["classifier", "balancing", "cv_pr_auc_mean", "cv_pr_auc_std", "test_pr_auc", "test_roc_auc", "f2_tau", "mcc_tau",
             "fpr_tau"]].round(4).to_string(), flush=True)
 
@@ -58,7 +63,8 @@ print(main[["classifier", "balancing", "cv_pr_auc_mean", "cv_pr_auc_std", "test_
 best_key = (main.loc[0, "classifier"], main.loc[0, "balancing"])
 rb = R[best_key]
 cmp_rows = []
-for key, r in R.items():
+skip_cmp = (tdir / f"{name}_best_vs_all.csv").exists()
+for key, r in ([] if skip_cmp else R.items()):
     if key == best_key:
         continue
     pb = paired_bootstrap(yte, rb["test_pred"], rb["tau"], r["test_pred"], r["tau"], B=B, seed=2)
@@ -67,16 +73,18 @@ for key, r in R.items():
                          d_pr_auc=pb["pr_auc"]["diff"], d_pr_auc_lo=pb["pr_auc"]["lo"], d_pr_auc_hi=pb["pr_auc"]["hi"],
                          p_pr_auc=pb["pr_auc"]["p"], d_f2=pb["f2"]["diff"], p_f2=pb["f2"]["p"],
                          d_mcc=pb["mcc"]["diff"], p_mcc=pb["mcc"]["p"], d_roc_auc=a1 - a2, p_delong=p))
-cmp = pd.DataFrame(cmp_rows)
-for col in ("p_pr_auc", "p_f2", "p_mcc", "p_delong"):
-    cmp[col + "_holm"] = holm(cmp[col].values)
-cmp.insert(0, "best", f"{best_key[0]}+{best_key[1]}")
-cmp.to_csv(tdir / f"{name}_best_vs_all.csv", index=False)
+if not skip_cmp:
+    cmp = pd.DataFrame(cmp_rows)
+    for col in ("p_pr_auc", "p_f2", "p_mcc", "p_delong"):
+        cmp[col + "_holm"] = holm(cmp[col].values)
+    cmp.insert(0, "best", f"{best_key[0]}+{best_key[1]}")
+    cmp.to_csv(tdir / f"{name}_best_vs_all.csv", index=False)
 print("best:", best_key, flush=True)
 
 # ------------------------------------------------------------- RQ1: each balancing vs none, per classifier
 rq1 = []
-for c in CLASSIFIERS:
+skip_rq1 = (tdir / f"{name}_rq1_balancing_vs_none.csv").exists()
+for c in ([] if skip_rq1 else CLASSIFIERS):
     if (c, "none") not in R:
         continue
     r0 = R[(c, "none")]
@@ -88,10 +96,11 @@ for c in CLASSIFIERS:
         a1, a2, z, p = delong_test(yte, r["test_pred"], r0["test_pred"])
         rq1.append(dict(classifier=c, balancing=b, d_pr_auc=pb["pr_auc"]["diff"], lo=pb["pr_auc"]["lo"], hi=pb["pr_auc"]["hi"],
                         p_pr_auc=pb["pr_auc"]["p"], d_f2=pb["f2"]["diff"], p_f2=pb["f2"]["p"], d_roc_auc=a1 - a2, p_delong=p))
-rq1 = pd.DataFrame(rq1)
-for col in ("p_pr_auc", "p_f2", "p_delong"):
-    rq1[col + "_holm"] = holm(rq1[col].values)
-rq1.to_csv(tdir / f"{name}_rq1_balancing_vs_none.csv", index=False)
+if not skip_rq1:
+    rq1 = pd.DataFrame(rq1)
+    for col in ("p_pr_auc", "p_f2", "p_delong"):
+        rq1[col + "_holm"] = holm(rq1[col].values)
+    rq1.to_csv(tdir / f"{name}_rq1_balancing_vs_none.csv", index=False)
 
 # ------------------------------------------------------------- RQ2: agreement between metrics
 metric_cols = ["test_pr_auc", "test_roc_auc", "f1_tau", "f2_tau", "mcc_tau", "precision_tau", "recall_tau"]
@@ -115,17 +124,27 @@ def meta_model(alpha, lam, n):
 
 
 grid = []
+val_idx = np.concatenate(blocks[1:])
 for a, lam in product(ALPHAS, LAMBDAS):
-    scores = []
+    scores, pv = [], []
     for k in range(1, 5):  # train on blocks 2..k+1, validate on block k+2
         tr = np.concatenate(blocks[:k])
         va = blocks[k]
         mm = meta_model(a, lam, len(tr)).fit(Z[tr], y_tr[tr])
-        scores.append(average_precision_score(y_tr[va], mm.predict_proba(Z[va])[:, 1]))
-    grid.append(dict(alpha=a, lam=lam, meta_cv_pr_auc=float(np.mean(scores)), std=float(np.std(scores, ddof=1))))
-grid = pd.DataFrame(grid).sort_values("meta_cv_pr_auc", ascending=False)
+        pv.append(mm.predict_proba(Z[va])[:, 1])
+        scores.append(average_precision_score(y_tr[va], pv[-1]))
+    t_g, f2_g = best_f2_threshold(y_tr[val_idx], np.concatenate(pv))
+    grid.append(dict(alpha=a, lam=lam, meta_cv_pr_auc=float(np.mean(scores)), std=float(np.std(scores, ddof=1)),
+                     oof_f2_at_best_grid_threshold=f2_g, best_grid_threshold=t_g))
+grid = pd.DataFrame(grid).sort_values("meta_cv_pr_auc", ascending=False).reset_index(drop=True)
+# PR-AUC depends only on the ranking, so strongly regularised settings can tie with weak ones while their
+# probabilities collapse below the 0.001 threshold grid. Among settings within 0.001 of the best PR-AUC,
+# the one with the highest out-of-fold F2 on the threshold grid is chosen.
+near = grid[grid.meta_cv_pr_auc >= grid.meta_cv_pr_auc.max() - 0.001]
+sel = near.sort_values(["oof_f2_at_best_grid_threshold", "meta_cv_pr_auc"], ascending=False).iloc[0]
+grid["selected"] = (grid.alpha == sel.alpha) & (grid.lam == sel.lam)
 grid.to_csv(tdir / f"{name}_stacking_grid.csv", index=False)
-a_best, l_best = grid.iloc[0]["alpha"], grid.iloc[0]["lam"]
+a_best, l_best = sel["alpha"], sel["lam"]
 meta_oof = np.full(len(y_tr), np.nan)
 for k in range(1, 5):
     tr = np.concatenate(blocks[:k])

@@ -114,7 +114,7 @@ def make_model(clf, p, seed=SEED):
 
 class TorchMLP:
     """Feed-forward network, ReLU hidden layers, sigmoid output, BCE loss, Adam,
-    early stopping on a 10% time-ordered tail of the training data (patience 10, max 100 epochs)."""
+    early stopping on a random 10% of the training part of the fold (patience 10, max 100 epochs)."""
 
     def __init__(self, n_layers, units, lr, dropout, seed=SEED, batch=1024, max_epochs=100, patience=10):
         self.n_layers, self.units, self.lr, self.dropout = n_layers, units, lr, dropout

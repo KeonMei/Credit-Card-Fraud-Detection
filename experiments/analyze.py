@@ -13,7 +13,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import average_precision_score, roc_auc_score, roc_curve
 from scipy.stats import spearmanr
 
-from common import BALANCING, CLASSIFIERS, RES, all_metrics, best_f2_threshold, load, time_folds
+from common import BALANCING, CLASSIFIERS, RES, all_metrics, best_f2_threshold, get_folds, load
 from stats_utils import bootstrap_ci, delong_test, holm, paired_bootstrap
 
 warnings.filterwarnings("ignore")
@@ -24,7 +24,8 @@ tdir = RES / "tables"
 tdir.mkdir(exist_ok=True)
 d = load(name)
 y_tr, yte = d["ytr"].astype(int), d["yte"].astype(int)
-folds = time_folds(len(y_tr))
+folds = get_folds(d)
+grouped = "fold_tr" in d  # Sparkov: card-grouped folds instead of time blocks
 oof_mask = np.zeros(len(y_tr), bool)
 for _, va in folds:
     oof_mask[va] = True
@@ -124,11 +125,13 @@ def meta_model(alpha, lam, n):
 
 
 grid = []
-val_idx = np.concatenate(blocks[1:])
+meta_val = list(range(len(blocks))) if grouped else list(range(1, len(blocks)))
+meta_train = (lambda k: [j for j in range(len(blocks)) if j != k]) if grouped else (lambda k: list(range(k)))
+val_idx = np.concatenate([blocks[k] for k in meta_val])
 for a, lam in product(ALPHAS, LAMBDAS):
     scores, pv = [], []
-    for k in range(1, 5):  # train on blocks 2..k+1, validate on block k+2
-        tr = np.concatenate(blocks[:k])
+    for k in meta_val:  # time data: train on earlier blocks only; grouped data: on the other folds
+        tr = np.concatenate([blocks[j] for j in meta_train(k)])
         va = blocks[k]
         mm = meta_model(a, lam, len(tr)).fit(Z[tr], y_tr[tr])
         pv.append(mm.predict_proba(Z[va])[:, 1])
@@ -146,8 +149,8 @@ grid["selected"] = (grid.alpha == sel.alpha) & (grid.lam == sel.lam)
 grid.to_csv(tdir / f"{name}_stacking_grid.csv", index=False)
 a_best, l_best = sel["alpha"], sel["lam"]
 meta_oof = np.full(len(y_tr), np.nan)
-for k in range(1, 5):
-    tr = np.concatenate(blocks[:k])
+for k in meta_val:
+    tr = np.concatenate([blocks[j] for j in meta_train(k)])
     meta_oof[blocks[k]] = meta_model(a_best, l_best, len(tr)).fit(Z[tr], y_tr[tr]).predict_proba(Z[blocks[k]])[:, 1]
 mo = ~np.isnan(meta_oof)
 tau_st, _ = best_f2_threshold(y_tr[mo], meta_oof[mo])

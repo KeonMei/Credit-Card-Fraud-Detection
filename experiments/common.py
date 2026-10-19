@@ -32,6 +32,14 @@ def load(name):
     return {k: d[k] for k in d.files}
 
 
+def get_folds(d):
+    """Forward-chaining time folds (ULB, IEEE-CIS) or card-grouped folds stored in the cache (Sparkov)."""
+    if "fold_tr" in d:
+        f = d["fold_tr"]
+        return [(np.where(f != k)[0], np.where(f == k)[0]) for k in range(int(f.max()) + 1)]
+    return time_folds(len(d["ytr"]))
+
+
 def time_folds(n, n_blocks=6):
     """Forward-chaining folds over n time-ordered rows: train blocks 1..k, validate block k+1."""
     edges = np.linspace(0, n, n_blocks + 1).astype(int)

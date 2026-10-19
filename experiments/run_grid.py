@@ -18,7 +18,7 @@ import warnings
 import numpy as np
 
 from common import (BALANCING, CLASSIFIERS, RES, SEED, Prep, Timer, average_precision_score, balance, load,
-                    make_model, sample_params, time_folds)
+                    make_model, sample_params, get_folds)
 
 warnings.filterwarnings("ignore")
 name = sys.argv[1]
@@ -29,7 +29,7 @@ clfs = sys.argv[4].split(",") if len(sys.argv) > 4 else CLASSIFIERS
 bals = sys.argv[5].split(",") if len(sys.argv) > 5 else BALANCING
 RATIOS = [0.1, 0.5, 1.0]
 # ENN is O(n^2): on IEEE-CIS the SMOTE-ENN ratio is fixed to 0.1 (compute budget, see deviations)
-ENN_RATIOS = [0.1] if name.startswith("ieee") else RATIOS
+ENN_RATIOS = [0.1] if name.startswith(("ieee", "sparkov")) else RATIOS
 out_dir = RES / name
 out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -40,7 +40,7 @@ sel = out_dir / "selected_features.npy"
 if sel.exists():
     keep = np.load(sel)
     X, Xte = X[:, keep], Xte[:, keep]
-folds = time_folds(len(y))
+folds = get_folds(d)
 tune_ids = list(range(5 - n_tune, 5))
 
 # preprocessed folds (imputer + scaler fitted on the training part of each fold)

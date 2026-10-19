@@ -19,34 +19,40 @@ from common import RES, SEED, Prep, Timer, all_metrics, balance, load, make_mode
 
 warnings.filterwarnings("ignore")
 ds = sys.argv[1]
+MAIN = {"ulb": "ulb_time", "ieee": "ieee_time", "sparkov": "sparkov_card"}[ds]
+MAIN_LABEL = "card split (main)" if ds == "sparkov" else "time split (main)"
+EXTRA = [("stratified random split", f"{ds}_random")]
+if ds == "sparkov":
+    EXTRA = [("date split (last 6 months)", "sparkov_date")] + EXTRA
 tdir = RES / "tables"
-best = pd.read_csv(tdir / f"{ds}_time_main.csv").iloc[0]
-keep_f = RES / f"{ds}_time" / "selected_features.npy"
+best = pd.read_csv(tdir / f"{MAIN}_main.csv").iloc[0]
+keep_f = RES / MAIN / "selected_features.npy"
 keep = np.load(keep_f) if keep_f.exists() else None
 configs = [(best["classifier"], best["balancing"]), ("LR", "none")]
 rows = []
 for clf, bal in configs:
-    r = pickle.load(open(RES / f"{ds}_time" / f"{clf}__{bal}.pkl", "rb"))
-    # (a) time split, numbers from the main run at threshold 0.5
-    d = load(f"{ds}_time")
+    r = pickle.load(open(RES / MAIN / f"{clf}__{bal}.pkl", "rb"))
+    # (a) main split, numbers from the main run at threshold 0.5
+    d = load(MAIN)
     m = all_metrics(d["yte"].astype(int), r["test_pred"], 0.5)
-    rows.append(dict(config=f"{clf}+{bal}", protocol="time split (main)", **m))
-    # (b) stratified random split
-    d = load(f"{ds}_random")
-    X, y, Xt, yt = d["Xtr"], d["ytr"].astype(int), d["Xte"], d["yte"].astype(int)
-    if keep is not None:
-        X, Xt = X[:, keep], Xt[:, keep]
-    pp = Prep().fit(X)
-    Xa, ya = balance(pp.transform(X), y, bal, r["ratio"]) if bal != "none" else (pp.transform(X), y)
-    with Timer() as t:
-        mdl = make_model(clf, r["params"]).fit(Xa, ya)
-    p = mdl.predict_proba(pp.transform(Xt))[:, 1]
-    rows.append(dict(config=f"{clf}+{bal}", protocol="stratified random split", **all_metrics(yt, p, 0.5)))
-    print(rows[-2:], flush=True)
+    rows.append(dict(config=f"{clf}+{bal}", protocol=MAIN_LABEL, **m))
+    # (b) other splits, same hyperparameters
+    for label, cache_name in EXTRA:
+        d = load(cache_name)
+        X, y, Xt, yt = d["Xtr"], d["ytr"].astype(int), d["Xte"], d["yte"].astype(int)
+        if keep is not None:
+            X, Xt = X[:, keep], Xt[:, keep]
+        pp = Prep().fit(X)
+        Xa, ya = balance(pp.transform(X), y, bal, r["ratio"]) if bal != "none" else (pp.transform(X), y)
+        with Timer() as t:
+            mdl = make_model(clf, r["params"]).fit(Xa, ya)
+        p = mdl.predict_proba(pp.transform(Xt))[:, 1]
+        rows.append(dict(config=f"{clf}+{bal}", protocol=label, **all_metrics(yt, p, 0.5)))
+        print(rows[-1], flush=True)
 
 # (c) leaky protocol: SMOTE on all data, then random split (best classifier, no further balancing)
 clf = best["classifier"]
-r = pickle.load(open(RES / f"{ds}_time" / f"{clf}__{best['balancing']}.pkl", "rb"))
+r = pickle.load(open(RES / MAIN / f"{clf}__{best['balancing']}.pkl", "rb"))
 d = load(f"{ds}_random")
 Xall = np.vstack([d["Xtr"], d["Xte"]])
 yall = np.concatenate([d["ytr"], d["yte"]]).astype(int)

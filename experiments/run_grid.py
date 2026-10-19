@@ -65,10 +65,20 @@ bal_cache = {}
 def balanced(k, method, ratio):
     key = (k, method, ratio)
     if key not in bal_cache:
-        Xa, ya, _, _ = fold_data(k)
-        with Timer() as t:
-            bal_cache[key] = balance(Xa, ya, method, ratio)
-        bal_cache[key] = (*bal_cache[key], t.s)
+        disk = out_dir / "enn_cache" / f"{k}_{ratio}.npz"  # SMOTE-ENN is slow: keep it on disk across restarts
+        if method == "SMOTE-ENN" and disk.exists():
+            z = np.load(disk)
+            bal_cache[key] = (z["X"], z["y"], float(z["secs"]))
+        else:
+            Xa, ya, _, _ = fold_data(k)
+            with Timer() as t:
+                bal_cache[key] = balance(Xa, ya, method, ratio)
+            bal_cache[key] = (*bal_cache[key], t.s)
+            if method == "SMOTE-ENN":
+                disk.parent.mkdir(exist_ok=True)
+                tmp = disk.with_name(disk.stem + ".partial.npz")  # rename after writing, so a crash leaves no broken cache
+                np.savez(tmp, X=bal_cache[key][0], y=bal_cache[key][1], secs=bal_cache[key][2])
+                tmp.rename(disk)
         # keep memory bounded: only the most recent few resampled sets
         if len(bal_cache) > 8:
             bal_cache.pop(next(iter(bal_cache)))

@@ -77,21 +77,62 @@ def _metric(name, y, p, thr):
     raise ValueError(name)
 
 
+class _Scorer:
+    """Metrics for one score vector on bootstrap resamples given as per-row multiplicities (weights).
+    Gives exactly the values of sklearn's average_precision_score / F2 / MCC on the resampled rows,
+    but in O(n) per resample, because the sort order of the scores is computed once."""
+
+    def __init__(self, y, p, thr):
+        self.order = np.argsort(-p, kind="mergesort")
+        ps = p[self.order]
+        self.ys = (y[self.order] == 1).astype(np.float64)
+        self.last = np.r_[np.where(np.diff(ps) != 0)[0], len(ps) - 1]  # last index of each group of equal scores
+        self.flag = (p >= thr)
+        self.yb = y == 1
+
+    def metrics(self, w, names):
+        out = {}
+        if "pr_auc" in names:
+            ws = w[self.order]
+            tp = np.cumsum(ws * self.ys)[self.last]
+            fp = np.cumsum(ws * (1 - self.ys))[self.last]
+            prec = np.divide(tp, tp + fp, out=np.zeros_like(tp), where=(tp + fp) > 0)
+            rec = tp / tp[-1]
+            out["pr_auc"] = float(np.sum(np.diff(np.r_[0.0, rec]) * prec))
+        if "f2" in names or "mcc" in names:
+            tp = float(w[self.flag & self.yb].sum()); fp = float(w[self.flag & ~self.yb].sum())
+            fn = float(w[~self.flag & self.yb].sum()); tn = float(w.sum()) - tp - fp - fn
+            if "f2" in names:
+                out["f2"] = 0.0 if tp == 0 else 5 * tp / (5 * tp + 4 * fn + fp)
+            if "mcc" in names:
+                den = np.sqrt((tp + fp) * (tp + fn) * (tn + fp) * (tn + fn))
+                out["mcc"] = 0.0 if den == 0 else (tp * tn - fp * fn) / den
+        return out
+
+
+def _weights(idx, n):
+    return np.bincount(idx, minlength=n).astype(np.float64)
+
+
 def bootstrap_ci(y, p, thr, metrics=("pr_auc", "f2", "mcc"), B=2000, seed=0):
+    sc = _Scorer(y, p, thr)
     vals = {m: [] for m in metrics}
     for idx in stratified_boot_indices(y, B, seed):
+        r = sc.metrics(_weights(idx, len(y)), metrics)
         for m in metrics:
-            vals[m].append(_metric(m, y[idx], p[idx], thr))
+            vals[m].append(r[m])
     return {m: (float(np.percentile(v, 2.5)), float(np.percentile(v, 97.5)), float(np.std(v))) for m, v in vals.items()}
 
 
 def paired_bootstrap(y, pa, ta, pb, tb, metrics=("pr_auc", "f2", "mcc"), B=2000, seed=0):
     """Difference A - B on the same resamples. Returns mean diff, 95% CI and two-sided bootstrap p-value."""
+    sa, sb = _Scorer(y, pa, ta), _Scorer(y, pb, tb)
     diffs = {m: [] for m in metrics}
     for idx in stratified_boot_indices(y, B, seed):
-        yy = y[idx]
+        w = _weights(idx, len(y))
+        ra, rb = sa.metrics(w, metrics), sb.metrics(w, metrics)
         for m in metrics:
-            diffs[m].append(_metric(m, yy, pa[idx], ta) - _metric(m, yy, pb[idx], tb))
+            diffs[m].append(ra[m] - rb[m])
     out = {}
     for m, v in diffs.items():
         v = np.asarray(v)

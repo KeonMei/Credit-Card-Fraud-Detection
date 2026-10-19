@@ -14,3 +14,22 @@ ieee_time,ProductCD H,197,150,0.7614213197969543,,,574,3333.0
 ieee_time,ProductCD R,257,231,0.8988326848249028,,,692,5496.0
 ieee_time,ProductCD S,183,144,0.7868852459016393,,,1255,3501.0
 ieee_time,ProductCD W,1810,960,0.5303867403314917,,,1998,93669.0
+sparkov_card,all frauds,1957,1823,0.9315278487480838,1050925.08,0.024720744127640384,198,
+sparkov_card,amount < 10,157,116,0.7388535031847133,1241.62,,15,
+sparkov_card,amount 10-100,288,237,0.8229166666666666,6199.86,,79,
+sparkov_card,amount 100-500,529,513,0.9697542533081286,159281.41,,27,
+sparkov_card,amount > 500,983,957,0.9735503560528993,884202.1900000001,,77,
+sparkov_card,category entertainment,65,61,0.9384615384615385,,,3,26241.0
+sparkov_card,category food_dining,39,25,0.6410256410256411,,,11,24963.0
+sparkov_card,category gas_transport,159,157,0.9874213836477987,,,10,37837.0
+sparkov_card,category grocery_net,37,26,0.7027027027027027,,,7,11678.0
+sparkov_card,category grocery_pos,422,421,0.9976303317535545,,,9,35193.0
+sparkov_card,category health_fitness,35,28,0.8,,,14,24159.0
+sparkov_card,category home,43,40,0.9302325581395349,,,5,35047.0
+sparkov_card,category kids_pets,61,41,0.6721311475409836,,,28,32106.0
+sparkov_card,category misc_net,249,239,0.9598393574297188,,,29,17709.0
+sparkov_card,category misc_pos,61,40,0.6557377049180327,,,14,21833.0
+sparkov_card,category personal_care,66,53,0.803030303030303,,,18,25486.0
+sparkov_card,category shopping_net,454,451,0.9933920704845814,,,28,27671.0
+sparkov_card,category shopping_pos,226,219,0.9690265486725663,,,13,32201.0
+sparkov_card,category travel,40,22,0.55,,,9,11691.0

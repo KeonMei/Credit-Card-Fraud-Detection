@@ -1,4 +1,4 @@
-"""Figures (PDF, vector) and error-analysis tables for both datasets."""
+"""Figures (PDF, vector) and error-analysis tables for all datasets with finished results."""
 import json
 import pickle
 
@@ -14,7 +14,10 @@ from common import BALANCING, CLASSIFIERS, RES, load
 FIG = RES / "figures"
 FIG.mkdir(exist_ok=True)
 T = RES / "tables"
-DS = [("ulb_time", "ULB (European cardholders)"), ("ieee_time", "IEEE-CIS (Vesta)")]
+DS = [("ulb_time", "ULB (European cardholders)"), ("ieee_time", "IEEE-CIS (Vesta)"), ("sparkov_card", "Sparkov (simulated)")]
+DS = [(n, t) for n, t in DS if (RES / n / "final_preds.npz").exists()]
+NP = len(DS)
+PREFIX = {"ulb": "ulb_time", "ieee": "ieee_time", "sparkov": "sparkov_card"}
 plt.rcParams.update({"font.size": 8, "axes.titlesize": 9, "axes.labelsize": 8, "legend.fontsize": 7,
                      "figure.dpi": 150, "savefig.bbox": "tight"})
 COL = {"LR": "#7f7f7f", "RF": "#2ca02c", "XGB": "#1f77b4", "LGBM": "#9467bd", "MLP": "#ff7f0e", "Stacking": "#d62728"}
@@ -32,7 +35,7 @@ def best_per_clf(name):
 
 
 # 1. PR curves --------------------------------------------------------------
-fig, axes = plt.subplots(1, 2, figsize=(7.0, 3.0))
+fig, axes = plt.subplots(1, NP, figsize=(3.5 * NP, 3.0))
 for ax, (name, title) in zip(axes, DS):
     yte = load(name)["yte"].astype(int)
     for _, row in best_per_clf(name).iterrows():
@@ -50,7 +53,7 @@ for ax, (name, title) in zip(axes, DS):
 save(fig, "fig_pr_curves")
 
 # 2. heatmap of test PR-AUC -------------------------------------------------
-fig, axes = plt.subplots(1, 2, figsize=(7.0, 2.6))
+fig, axes = plt.subplots(1, NP, figsize=(3.5 * NP, 2.6))
 for ax, (name, title) in zip(axes, DS):
     main = pd.read_csv(T / f"{name}_main.csv")
     M = main.pivot(index="classifier", columns="balancing", values="test_pr_auc").reindex(index=CLASSIFIERS, columns=BALANCING)
@@ -69,7 +72,7 @@ for ax, (name, title) in zip(axes, DS):
 save(fig, "fig_heatmap_pr_auc")
 
 # 3. threshold curves for the stacking model --------------------------------
-fig, axes = plt.subplots(1, 2, figsize=(7.0, 2.8))
+fig, axes = plt.subplots(1, NP, figsize=(3.5 * NP, 2.8))
 for ax, (name, title) in zip(axes, DS):
     f = np.load(RES / name / "final_preds.npz")
     y, p = f["yte"].astype(int), f["stack"]
@@ -98,7 +101,7 @@ for ax in axes:
 save(fig, "fig_threshold_curves")
 
 # 4. confusion matrices + error analysis tables -------------------------------
-fig, axes = plt.subplots(1, 2, figsize=(6.0, 2.4), gridspec_kw=dict(wspace=0.55))
+fig, axes = plt.subplots(1, NP, figsize=(3.0 * NP, 2.4), gridspec_kw=dict(wspace=0.55))
 err_rows = []
 for ax, (name, title) in zip(axes, DS):
     f = np.load(RES / name / "final_preds.npz")
@@ -132,6 +135,13 @@ for ax, (name, title) in zip(axes, DS):
             err_rows.append(dict(dataset=name, group=f"amount {lab}", n_fraud=int(m.sum()), detected=int(yh[m].sum()),
                                  recall=float(yh[m].mean()), fraud_amount=float(amt[m].sum()),
                                  false_positives=int(((yh == 1) & ~fr & (cat == lab)).sum())))
+    if "cat_te" in d:
+        for pc in sorted(set(d["cat_te"])):
+            m = fr & (d["cat_te"] == pc)
+            if m.sum():
+                err_rows.append(dict(dataset=name, group=f"category {pc}", n_fraud=int(m.sum()), detected=int(yh[m].sum()),
+                                     recall=float(yh[m].mean()), n_transactions=int((d["cat_te"] == pc).sum()),
+                                     false_positives=int(((yh == 1) & ~fr & (d["cat_te"] == pc)).sum())))
     if "prod_te" in d:
         for pc in sorted(set(d["prod_te"])):
             m = fr & (d["prod_te"] == pc)
@@ -144,27 +154,30 @@ pd.DataFrame(err_rows).to_csv(T / "error_analysis.csv", index=False)
 
 # 5. protocol comparison (time / random / leaky) -------------------------------
 rows = []
-for ds in ("ulb", "ieee"):
+for ds in ("ulb", "ieee", "sparkov"):
     f = T / f"{ds}_sensitivity.csv"
     if f.exists():
         rows.append(pd.read_csv(f))
 if rows:
     s = pd.concat(rows)
     s = s[s.config.str.contains("LR") == False]  # noqa: E712  best configuration only
-    fig, axes = plt.subplots(1, 2, figsize=(7.0, 2.6), sharey=True)
-    for ax, ds in zip(axes, ("ulb", "ieee")):
+    dss = [ds for ds in ("ulb", "ieee", "sparkov") if ds in set(s.dataset)]
+    npr = [int((s.dataset == ds).sum()) for ds in dss]
+    fig, axes = plt.subplots(1, len(dss), figsize=(3.5 * len(dss), 2.6), sharey=True,
+                             gridspec_kw=dict(width_ratios=npr))
+    for ax, ds in zip(np.atleast_1d(axes), dss):
         q = s[s.dataset == ds]
         x = np.arange(len(q))
         w = 0.25
         for i, (m, lab) in enumerate([("pr_auc", "PR-AUC"), ("f1", "$F_1$ at 0.5"), ("mcc", "MCC at 0.5")]):
             ax.bar(x + (i - 1) * w, q[m].values, w, label=lab)
             for xi, v in zip(x, q[m].values):
-                ax.text(xi + (i - 1) * w, v + 0.01, f"{v:.2f}", ha="center", fontsize=6)
-        ax.set_xticks(x, [p.replace(" (main)", "").replace(" (leaky)", "\n(leaky)").replace("stratified ", "")
-                          for p in q.protocol], fontsize=7)
-        ax.set(title=dict(DS)[f"{ds}_time"], ylim=(0, 1.1), ylabel="Metric value")
+                ax.text(xi + (i - 1) * w, v + 0.01, f"{v:.2f}", ha="center", fontsize=5.5)
+        ax.set_xticks(x, [p.replace(" (main)", "").replace("SMOTE before split (leaky)", "SMOTE before\nsplit (leaky)").replace("stratified ", "")
+                          .replace(" (last 6 months)", "\n(last 6 months)") for p in q.protocol], fontsize=6.5)
+        ax.set(title=dict(DS).get(PREFIX[ds], ds), ylim=(0, 1.1), ylabel="Metric value")
         ax.grid(axis="y", alpha=0.3, lw=0.4)
-    h, l = axes[0].get_legend_handles_labels()
+    h, l = np.atleast_1d(axes)[0].get_legend_handles_labels()
     fig.legend(h, l, loc="lower center", ncol=3, frameon=False, bbox_to_anchor=(0.5, -0.1))
     save(fig, "fig_protocol_comparison")
 print("figures done")

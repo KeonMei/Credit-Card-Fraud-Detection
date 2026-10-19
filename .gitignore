@@ -12,3 +12,4 @@ experiments/cache/
 experiments/logs/
 experiments/results/*/*.pkl
 experiments/results/*/*.npz
+experiments/results/*/enn_cache/

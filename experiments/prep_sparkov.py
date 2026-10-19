@@ -7,7 +7,8 @@ previous 24 hours (only earlier transactions of the same card). Names, addresses
 and the card number itself are not used as features; the card number is only used for grouping.
 
 Main split: 20% of the cards (with all their transactions) form the test set; the cards are drawn
-separately among cards with and without fraud, so the fraud rate stays similar. 5-fold cross-validation
+separately among cards with and without fraud, so the fraud rate stays similar. Because of the compute
+budget, training uses a random 50% of the remaining cards. 5-fold cross-validation
 on the training cards is grouped by card (StratifiedGroupKFold). Extra splits for the sensitivity check:
 by date (last six months = test) and stratified random by transaction.
 """
@@ -68,7 +69,15 @@ for flag in (0, 1):
     test_cards.append(rng.choice(cs, size=int(round(0.2 * len(cs))), replace=False))
 test_cards = set(np.concatenate(test_cards))
 te = np.isin(cards, list(test_cards))
-tr = ~te
+# compute budget: the models are trained on a random 50% of the training cards (drawn separately
+# among cards with and without fraud); the test set keeps all 200 test cards
+train_card_ids = card_fraud.index[~card_fraud.index.isin(list(test_cards))]
+keep_cards = []
+for flag in (0, 1):
+    cs = train_card_ids[card_fraud.loc[train_card_ids].values == flag].values
+    keep_cards.append(rng.choice(cs, size=int(round(0.5 * len(cs))), replace=False))
+keep_cards = np.concatenate(keep_cards)
+tr = np.isin(cards, keep_cards)
 # 5 grouped folds on the training cards
 fold_id = np.full(len(y), -1, dtype=np.int8)
 sgkf = StratifiedGroupKFold(n_splits=5, shuffle=True, random_state=SEED)
@@ -90,7 +99,9 @@ np.savez_compressed(OUT / "sparkov_random.npz", Xtr=X.values[itr], ytr=y[itr], X
 info = json.load(open(OUT / "data_info.json"))
 info["sparkov"] = dict(raw_rows=n_raw, raw_frauds=f_raw, duplicates_removed=n_dup, rows=len(df), frauds=int(y.sum()),
                        cards=int(len(card_fraud)), cards_with_fraud=int(card_fraud.sum()),
-                       train_rows=int(tr.sum()), train_frauds=int(y[tr].sum()), train_cards=int(len(card_fraud) - len(test_cards)),
+                       train_rows=int(tr.sum()), train_frauds=int(y[tr].sum()), train_cards=int(len(keep_cards)),
+                       train_cards_available=int(len(card_fraud) - len(test_cards)),
+                       train_rows_available=int((~te).sum()), train_frauds_available=int(y[~te].sum()),
                        test_rows=int(te.sum()), test_frauds=int(y[te].sum()), test_cards=len(test_cards),
                        period=[str(df["ts"].min()), str(df["ts"].max())], n_features=X.shape[1],
                        fold_sizes=[int((fold_id == k).sum()) for k in range(5)],

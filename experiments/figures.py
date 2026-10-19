@@ -61,7 +61,7 @@ for ax, (name, title) in zip(axes, DS):
             if not np.isnan(v):
                 ax.text(j, i, f"{v:.3f}", ha="center", va="center", fontsize=7,
                         color="white" if v > np.nanmean(M.values) + 0.5 * np.nanstd(M.values) else "black")
-    ax.set_xticks(range(len(BALANCING)), BALANCING)
+    ax.set_xticks(range(len(BALANCING)), BALANCING, rotation=20, ha="right")
     ax.set_yticks(range(len(CLASSIFIERS)), CLASSIFIERS)
     ax.set_title(f"{title}: test PR-AUC")
     ax.set_xlabel("Balancing method")
@@ -85,16 +85,20 @@ for ax, (name, title) in zip(axes, DS):
     ax.plot(grid, prec, label="Precision", color="#1f77b4")
     ax.plot(grid, rec, label="Recall", color="#2ca02c")
     ax.plot(grid, f2, label="$F_2$", color="#d62728")
-    ax.plot(grid, np.array(fpr) * 100, label="FPR (%)", color="#7f7f7f", ls="--")
+    ax.plot(grid, fpr, label="FPR", color="#7f7f7f", ls="--")
     ax.axvline(float(f["tau_st"]), color="k", lw=0.8, ls="-.", label=f"$\\tau^*$ = {float(f['tau_st']):.3f}")
     ax.axvline(0.5, color="k", lw=0.6, ls=":", label="$\\tau$ = 0.5")
     ax.set(xlabel="Decision threshold $\\tau$", ylabel="Metric value", title=f"{title}: stacking model", ylim=(0, 1.02))
-    ax.legend(frameon=False, loc="center right")
     ax.grid(alpha=0.3, lw=0.4)
+h, l = axes[0].get_legend_handles_labels()
+fig.legend(h[:4], l[:4], loc="lower center", ncol=4, frameon=False, bbox_to_anchor=(0.5, -0.13))
+for ax in axes:
+    hh, ll = ax.get_legend_handles_labels()
+    ax.legend(hh[4:], ll[4:], frameon=True, loc="upper right", fontsize=6.5)
 save(fig, "fig_threshold_curves")
 
 # 4. confusion matrices + error analysis tables -------------------------------
-fig, axes = plt.subplots(1, 2, figsize=(5.4, 2.4))
+fig, axes = plt.subplots(1, 2, figsize=(6.0, 2.4), gridspec_kw=dict(wspace=0.55))
 err_rows = []
 for ax, (name, title) in zip(axes, DS):
     f = np.load(RES / name / "final_preds.npz")
@@ -160,6 +164,7 @@ if rows:
                           for p in q.protocol], fontsize=7)
         ax.set(title=dict(DS)[f"{ds}_time"], ylim=(0, 1.1), ylabel="Metric value")
         ax.grid(axis="y", alpha=0.3, lw=0.4)
-    axes[0].legend(frameon=False, loc="upper left")
+    h, l = axes[0].get_legend_handles_labels()
+    fig.legend(h, l, loc="lower center", ncol=3, frameon=False, bbox_to_anchor=(0.5, -0.1))
     save(fig, "fig_protocol_comparison")
 print("figures done")

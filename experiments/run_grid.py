@@ -94,11 +94,14 @@ for method in bals:
             print("skip", tag, flush=True)
             continue
         rng = np.random.default_rng(SEED)
-        trials = []
+        part = out_dir / f"{tag}.partial.pkl"
+        trials = pickle.load(open(part, "rb")) if part.exists() else []  # resume after an interruption
         for i in range(TRIALS[clf]):
             params = sample_params(clf, rng)
             rset = ENN_RATIOS if method == "SMOTE-ENN" else RATIOS
             ratio = rset[int(rng.integers(0, len(rset)))] if method != "none" else None
+            if i < len(trials):
+                continue
             scores, preds, secs = [], {}, 0.0
             for k in tune_ids:
                 p, s, _, _ = run_fold(k, clf, params, method, ratio)
@@ -106,6 +109,7 @@ for method in bals:
                 preds[k] = p
                 secs += s
             trials.append(dict(params=params, ratio=ratio, score=float(np.mean(scores)), preds=preds, secs=secs))
+            pickle.dump(trials, open(part, "wb"))
             print(f"{tag} trial {i} {np.mean(scores):.4f} {secs:.0f}s {params} r={ratio}", flush=True)
         best = max(trials, key=lambda t: t["score"])
         oof = np.full(len(y), np.nan, dtype=np.float32)
@@ -128,5 +132,6 @@ for method in bals:
                    search_seconds=float(sum(t["secs"] for t in trials)),
                    trials=[{k: v for k, v in t.items() if k != "preds"} for t in trials])
         pickle.dump(res, open(out_dir / f"{tag}.pkl", "wb"))
+        part.unlink(missing_ok=True)
         print(f"DONE {tag} cv={res['cv_mean']:.4f}+-{res['cv_std']:.4f} test={res['test_pr_auc']:.4f} "
               f"fit={fit_s:.0f}s", flush=True)

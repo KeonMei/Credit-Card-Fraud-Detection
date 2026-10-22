@@ -197,7 +197,8 @@ def all_metrics(y, p, thr=0.5):
 
 
 def best_f2_threshold(y, p):
-    grid = np.round(np.arange(0.001, 1.0, 0.001), 3)
+    # 0.001 to 0.999 in steps of 0.001, extended below 0.001 with logarithmic steps down to 1e-5
+    grid = np.unique(np.concatenate([np.round(np.logspace(-5, -3, 21), 8), np.round(np.arange(0.001, 1.0, 0.001), 3)]))
     # vectorised F2 over the grid
     order = np.argsort(-p)
     ps, ys = p[order], y[order]

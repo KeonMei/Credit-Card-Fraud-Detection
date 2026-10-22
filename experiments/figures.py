@@ -6,6 +6,12 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
+
+
+def fmt_tau(t):
+    """Threshold label: 3 decimals, or 2 significant digits below 0.001 (extended grid)."""
+    t = float(t)
+    return f"{t:.3f}" if t >= 0.001 else f"{t:.2g}"
 import pandas as pd
 from sklearn.metrics import confusion_matrix, precision_recall_curve
 
@@ -89,7 +95,7 @@ for ax, (name, title) in zip(axes, DS):
     ax.plot(grid, rec, label="Recall", color="#2ca02c")
     ax.plot(grid, f2, label="$F_2$", color="#d62728")
     ax.plot(grid, fpr, label="FPR", color="#7f7f7f", ls="--")
-    ax.axvline(float(f["tau_st"]), color="k", lw=0.8, ls="-.", label=f"$\\tau^*$ = {float(f['tau_st']):.3f}")
+    ax.axvline(float(f["tau_st"]), color="k", lw=0.8, ls="-.", label=f"$\\tau^*$ = {fmt_tau(f['tau_st'])}")
     ax.axvline(0.5, color="k", lw=0.6, ls=":", label="$\\tau$ = 0.5")
     ax.set(xlabel="Decision threshold $\\tau$", ylabel="Metric value", title=f"{title}: stacking model", ylim=(0, 1.02))
     ax.grid(alpha=0.3, lw=0.4)
@@ -115,7 +121,7 @@ for ax, (name, title) in zip(axes, DS):
             ax.text(j, i, f"{cm[i, j]:,}", ha="center", va="center", fontsize=9)
     ax.set_xticks([0, 1], ["Legitimate", "Fraud"])
     ax.set_yticks([0, 1], ["Legitimate", "Fraud"])
-    ax.set(xlabel="Predicted class", ylabel="True class", title=f"{title}\n(stacking, $\\tau^*$ = {tau:.3f})")
+    ax.set(xlabel="Predicted class", ylabel="True class", title=f"{title}\n(stacking, $\\tau^*$ = {fmt_tau(tau)})")
     for s in ax.spines.values():
         s.set_visible(True)
     ax.set_xlim(-0.5, 1.5); ax.set_ylim(1.5, -0.5)

@@ -3,6 +3,12 @@ import json
 import pickle
 
 import numpy as np
+
+
+def fmt_tau(t):
+    """Threshold label: 3 decimals, or 2 significant digits below 0.001 (extended grid)."""
+    t = float(t)
+    return f"{t:.3f}" if t >= 0.001 else f"{t:.2g}"
 import pandas as pd
 
 from common import BALANCING, CLASSIFIERS, RES
@@ -102,7 +108,7 @@ for ds, label in DS.items():
     with open(OUT / f"tab_stacking_{ds}.tex", "w") as f:
         f.write("\\begin{tabular}{llccccccc}\n\\hline\nModel & $\\tau$ & PR-AUC & Precision & Recall & $F_2$ [95\\% CI] & MCC & FPR (\\%) & FP / FN \\\\\n\\hline\n")
         for _, r in s.iterrows():
-            f.write(f"{r.model} & {r.threshold:.3f} & {r.pr_auc:.3f} & {r.precision:.3f} & {r.recall:.3f} & "
+            f.write(f"{r.model} & {fmt_tau(r.threshold)} & {r.pr_auc:.3f} & {r.precision:.3f} & {r.recall:.3f} & "
                     f"{r.f2:.3f} [{r.f2_lo:.3f}, {r.f2_hi:.3f}] & {r.mcc:.3f} & {100*r.fpr:.3f} & {int(r.fp)} / {int(r.fn)} \\\\\n")
         f.write("\\hline\n\\end{tabular}\n")
 

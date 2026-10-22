@@ -26,9 +26,23 @@ d = load(name)
 y_tr, yte = d["ytr"].astype(int), d["yte"].astype(int)
 folds = get_folds(d)
 grouped = "fold_tr" in d  # Sparkov: card-grouped folds instead of time blocks
+groups_te = d.get("groups_te")  # Sparkov: card of every test row -> the bootstrap resamples whole cards
+BOOT_METRICS = ("pr_auc", "f2", "mcc", "roc_auc") if groups_te is not None else ("pr_auc", "f2", "mcc")
+TUNE_FOLD = 4  # run_grid.py is called with n_tune=1: hyperparameters are chosen on the last fold
 oof_mask = np.zeros(len(y_tr), bool)
 for _, va in folds:
     oof_mask[va] = True
+
+
+
+def roc_compare(pb, pa_pred, pb_pred):
+    """ROC-AUC difference A - B and its p-value: DeLong for row-level data,
+    the card-level paired bootstrap for Sparkov (DeLong assumes independent rows)."""
+    if groups_te is None:
+        a1, a2, z, p = delong_test(yte, pa_pred, pb_pred)
+        return a1 - a2, p, "DeLong"
+    return roc_auc_score(yte, pa_pred) - roc_auc_score(yte, pb_pred), pb["roc_auc"]["p"], "card bootstrap"
+
 
 R = {}
 for c, b in product(CLASSIFIERS, BALANCING):
@@ -45,8 +59,11 @@ for (c, b), r in ([] if main_f.exists() else R.items()):
     tau = r["tau"]
     m05 = all_metrics(yte, r["test_pred"], 0.5)
     mt = all_metrics(yte, r["test_pred"], tau)
-    ci = bootstrap_ci(yte, r["test_pred"], tau, metrics=("pr_auc",), B=B, seed=1)
-    rows.append(dict(classifier=c, balancing=b, ratio=r["ratio"], cv_pr_auc_mean=r["cv_mean"], cv_pr_auc_std=r["cv_std"],
+    ci = bootstrap_ci(yte, r["test_pred"], tau, metrics=("pr_auc",), B=B, seed=1, groups=groups_te)
+    folds_eval = [v for i, v in enumerate(r["fold_pr_auc"]) if i != TUNE_FOLD]  # the four folds not used for tuning
+    rows.append(dict(classifier=c, balancing=b, ratio=r["ratio"], cv_pr_auc_mean=float(np.mean(folds_eval)),
+                     cv_pr_auc_std=float(np.std(folds_eval, ddof=1)), tune_fold_pr_auc=r["fold_pr_auc"][TUNE_FOLD],
+                     cv5_pr_auc_mean=r["cv_mean"],
                      test_pr_auc=mt["pr_auc"], pr_auc_lo=ci["pr_auc"][0], pr_auc_hi=ci["pr_auc"][1],
                      test_roc_auc=mt["roc_auc"], tau=tau,
                      **{f"{k}_tau": v for k, v in mt.items() if k in ("precision", "recall", "f1", "f2", "mcc", "fpr", "tp", "fp", "fn", "tn")},
@@ -68,15 +85,16 @@ skip_cmp = (tdir / f"{name}_best_vs_all.csv").exists()
 for key, r in ([] if skip_cmp else R.items()):
     if key == best_key:
         continue
-    pb = paired_bootstrap(yte, rb["test_pred"], rb["tau"], r["test_pred"], r["tau"], B=B, seed=2)
-    a1, a2, z, p = delong_test(yte, rb["test_pred"], r["test_pred"])
+    pb = paired_bootstrap(yte, rb["test_pred"], rb["tau"], r["test_pred"], r["tau"], metrics=BOOT_METRICS, B=B, seed=2,
+                          groups=groups_te)
+    d_roc, p_roc, roc_test = roc_compare(pb, rb["test_pred"], r["test_pred"])
     cmp_rows.append(dict(other_classifier=key[0], other_balancing=key[1],
                          d_pr_auc=pb["pr_auc"]["diff"], d_pr_auc_lo=pb["pr_auc"]["lo"], d_pr_auc_hi=pb["pr_auc"]["hi"],
                          p_pr_auc=pb["pr_auc"]["p"], d_f2=pb["f2"]["diff"], p_f2=pb["f2"]["p"],
-                         d_mcc=pb["mcc"]["diff"], p_mcc=pb["mcc"]["p"], d_roc_auc=a1 - a2, p_delong=p))
+                         d_mcc=pb["mcc"]["diff"], p_mcc=pb["mcc"]["p"], d_roc_auc=d_roc, p_roc_auc=p_roc, roc_test=roc_test))
 if not skip_cmp:
     cmp = pd.DataFrame(cmp_rows)
-    for col in ("p_pr_auc", "p_f2", "p_mcc", "p_delong"):
+    for col in ("p_pr_auc", "p_f2", "p_mcc", "p_roc_auc"):
         cmp[col + "_holm"] = holm(cmp[col].values)
     cmp.insert(0, "best", f"{best_key[0]}+{best_key[1]}")
     cmp.to_csv(tdir / f"{name}_best_vs_all.csv", index=False)
@@ -93,13 +111,15 @@ for c in ([] if skip_rq1 else CLASSIFIERS):
         if (c, b) not in R:
             continue
         r = R[(c, b)]
-        pb = paired_bootstrap(yte, r["test_pred"], r["tau"], r0["test_pred"], r0["tau"], B=B, seed=3)
-        a1, a2, z, p = delong_test(yte, r["test_pred"], r0["test_pred"])
+        pb = paired_bootstrap(yte, r["test_pred"], r["tau"], r0["test_pred"], r0["tau"], metrics=BOOT_METRICS, B=B, seed=3,
+                              groups=groups_te)
+        d_roc, p_roc, roc_test = roc_compare(pb, r["test_pred"], r0["test_pred"])
         rq1.append(dict(classifier=c, balancing=b, d_pr_auc=pb["pr_auc"]["diff"], lo=pb["pr_auc"]["lo"], hi=pb["pr_auc"]["hi"],
-                        p_pr_auc=pb["pr_auc"]["p"], d_f2=pb["f2"]["diff"], p_f2=pb["f2"]["p"], d_roc_auc=a1 - a2, p_delong=p))
+                        p_pr_auc=pb["pr_auc"]["p"], d_f2=pb["f2"]["diff"], p_f2=pb["f2"]["p"], d_roc_auc=d_roc,
+                        p_roc_auc=p_roc, roc_test=roc_test))
 if not skip_rq1:
     rq1 = pd.DataFrame(rq1)
-    for col in ("p_pr_auc", "p_f2", "p_delong"):
+    for col in ("p_pr_auc", "p_f2", "p_roc_auc"):
         rq1[col + "_holm"] = holm(rq1[col].values)
     rq1.to_csv(tdir / f"{name}_rq1_balancing_vs_none.csv", index=False)
 
@@ -166,7 +186,7 @@ for label, p, tau in [("stacking", p_stack, tau_st), ("plain average", p_avg, ta
                       (f"best single ({best_key[0]}+{best_key[1]})", rb["test_pred"], tau_best_single)]:
     for tname, t in (("0.5", 0.5), ("tau*", tau)):
         m = all_metrics(yte, p, t)
-        ci = bootstrap_ci(yte, p, t, B=B, seed=4)
+        ci = bootstrap_ci(yte, p, t, B=B, seed=4, groups=groups_te)
         stack_rows.append(dict(model=label, threshold_rule=tname, threshold=t, **{k: m[k] for k in
                           ("pr_auc", "roc_auc", "precision", "recall", "f1", "f2", "mcc", "fpr", "tp", "fp", "fn", "tn")},
                           pr_auc_lo=ci["pr_auc"][0], pr_auc_hi=ci["pr_auc"][1], f2_lo=ci["f2"][0], f2_hi=ci["f2"][1],
@@ -178,11 +198,11 @@ tests = []
 for label, p, tau in [("stacking vs best single", p_stack, tau_st), ("stacking vs plain average", p_avg, tau_avg)]:
     other_p, other_t = (rb["test_pred"], tau_best_single) if "single" in label else (p_avg, tau_avg)
     pa_ = p_stack
-    pb = paired_bootstrap(yte, pa_, tau_st, other_p, other_t, B=B, seed=5)
-    a1, a2, z, pv = delong_test(yte, pa_, other_p)
+    pb = paired_bootstrap(yte, pa_, tau_st, other_p, other_t, metrics=BOOT_METRICS, B=B, seed=5, groups=groups_te)
+    d_roc, p_roc, roc_test = roc_compare(pb, pa_, other_p)
     tests.append(dict(comparison=label, d_pr_auc=pb["pr_auc"]["diff"], lo=pb["pr_auc"]["lo"], hi=pb["pr_auc"]["hi"],
                       p_pr_auc=pb["pr_auc"]["p"], d_f2=pb["f2"]["diff"], p_f2=pb["f2"]["p"],
-                      d_mcc=pb["mcc"]["diff"], p_mcc=pb["mcc"]["p"], d_roc_auc=a1 - a2, p_delong=pv))
+                      d_mcc=pb["mcc"]["diff"], p_mcc=pb["mcc"]["p"], d_roc_auc=d_roc, p_roc_auc=p_roc, roc_test=roc_test))
 tests = pd.DataFrame(tests)
 tests.to_csv(tdir / f"{name}_stacking_tests.csv", index=False)
 

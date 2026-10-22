@@ -15,7 +15,7 @@ import pandas as pd
 from imblearn.over_sampling import SMOTE
 from sklearn.model_selection import train_test_split
 
-from common import RES, SEED, Prep, Timer, all_metrics, balance, load, make_model
+from common import RES, SEED, Prep, Timer, all_metrics, balance, load, make_model, select_top_features
 
 warnings.filterwarnings("ignore")
 ds = sys.argv[1]
@@ -26,8 +26,8 @@ if ds == "sparkov":
     EXTRA = [("date split (last 6 months)", "sparkov_date")] + EXTRA
 tdir = RES / "tables"
 best = pd.read_csv(tdir / f"{MAIN}_main.csv").iloc[0]
-keep_f = RES / MAIN / "selected_features.npy"
-keep = np.load(keep_f) if keep_f.exists() else None
+# IEEE-CIS: the 100 features are selected on the training part of each protocol (select_top_features)
+SELECT = ds == "ieee"
 configs = [(best["classifier"], best["balancing"]), ("LR", "none")]
 rows = []
 for clf, bal in configs:
@@ -40,7 +40,8 @@ for clf, bal in configs:
     for label, cache_name in EXTRA:
         d = load(cache_name)
         X, y, Xt, yt = d["Xtr"], d["ytr"].astype(int), d["Xte"], d["yte"].astype(int)
-        if keep is not None:
+        if SELECT:
+            keep = select_top_features(X, y)
             X, Xt = X[:, keep], Xt[:, keep]
         pp = Prep().fit(X)
         Xa, ya = balance(pp.transform(X), y, bal, r["ratio"]) if bal != "none" else (pp.transform(X), y)
@@ -56,8 +57,8 @@ r = pickle.load(open(RES / MAIN / f"{clf}__{best['balancing']}.pkl", "rb"))
 d = load(f"{ds}_random")
 Xall = np.vstack([d["Xtr"], d["Xte"]])
 yall = np.concatenate([d["ytr"], d["yte"]]).astype(int)
-if keep is not None:
-    Xall = Xall[:, keep]
+if SELECT:  # part of the leaky protocol: the selection also sees all rows
+    Xall = Xall[:, select_top_features(Xall, yall)]
 pp = Prep().fit(Xall)  # also leaky: statistics of the test rows are used
 Xs, ys = SMOTE(sampling_strategy=1.0, random_state=SEED).fit_resample(pp.transform(Xall), yall)
 Xa, Xt, ya, yt = train_test_split(Xs, ys, test_size=0.2, stratify=ys, random_state=SEED)

@@ -10,11 +10,12 @@ followed by statistical tests, a stacking model with a tuned threshold and addit
 | `prep_ieee_random.py` | IEEE-CIS dataset statistics and the stratified random 80/20 split |
 | `prep_sparkov.py` | Sparkov: joins fraudTrain/fraudTest, 25 features (amount, time, age, gender, distance, per-card activity in the previous 24 h, category), split by card (20% of cards for test, 50% of the other cards for training), 5 card-grouped folds; extra date and random splits |
 | `subsample_sparkov_splits.py` | subsamples the training part of the Sparkov date and random splits to the size of the card-split training set |
-| `select_features.py` | IEEE-CIS: 100 features with the highest LightGBM gain on the training period |
+| `prep_ieee_folds.py` | IEEE-CIS: inside each forward-chaining fold, fits the feature builder and selects the 100 features with the highest LightGBM gain on the training part only; for the final model both steps use the whole training period |
+| `add_sparkov_test_cards.py` | adds the card number of every Sparkov test transaction to an existing cache (needed for the card-level bootstrap) |
 | `common.py` | forward-chaining folds (ULB, IEEE-CIS) or card-grouped folds (Sparkov), balancing, classifiers, search ranges, metrics, F2 threshold |
 | `run_grid.py` | random search per configuration, out-of-fold predictions on 5 forward-chaining folds, refit, test predictions |
-| `stats_utils.py` | paired stratified bootstrap, DeLong test, Holm correction |
-| `analyze.py` | main table, best-vs-all tests, balancing-vs-none tests, metric agreement, stacking, threshold analysis |
+| `stats_utils.py` | paired stratified bootstrap (by row, or by card for Sparkov), weighted ROC-AUC, DeLong test, Holm correction |
+| `analyze.py` | main table (CV over the four folds not used for tuning), best-vs-all tests, balancing-vs-none tests, metric agreement, stacking, threshold analysis |
 | `sensitivity.py` | random split and "SMOTE before split" protocol compared with the time split |
 | `figures.py` | PR curves, PR-AUC heatmap, threshold curves, confusion matrices, protocol comparison; error analysis table |
 | `run_all.sh` | runs everything for ULB and IEEE-CIS in order (restartable) |

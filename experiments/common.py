@@ -40,6 +40,14 @@ def get_folds(d):
     return time_folds(len(d["ytr"]))
 
 
+def select_top_features(X, y, n=100, seed=SEED):
+    """Indices of the n features with the highest LightGBM gain on (X, y); used for IEEE-CIS inside each fold."""
+    m = LGBMClassifier(n_estimators=300, learning_rate=0.05, num_leaves=63, n_jobs=N_JOBS, verbose=-1, random_state=seed)
+    m.fit(X, y)
+    gain = m.booster_.feature_importance("gain")
+    return np.sort(np.argsort(-gain)[:n])
+
+
 def time_folds(n, n_blocks=6):
     """Forward-chaining folds over n time-ordered rows: train blocks 1..k, validate block k+1."""
     edges = np.linspace(0, n, n_blocks + 1).astype(int)

@@ -1,4 +1,4 @@
-"""Statistical tests: paired stratified bootstrap, DeLong test, Holm correction."""
+"""Statistical tests: paired stratified bootstrap (by row or by card), DeLong test, Holm correction."""
 import numpy as np
 from scipy import stats
 from sklearn.metrics import average_precision_score, fbeta_score, matthews_corrcoef
@@ -62,6 +62,27 @@ def stratified_boot_indices(y, B=2000, seed=0):
         yield np.concatenate([rng.choice(pos, len(pos)), rng.choice(neg, len(neg))])
 
 
+def _boot_weights(y, B, seed, groups=None):
+    """Bootstrap resamples as per-row multiplicities.
+
+    groups=None: rows are resampled, frauds and legitimate rows separately (stratified_boot_indices).
+    groups given (card number of every row): whole cards are resampled with replacement, cards with and
+    without fraud separately, and every transaction of a drawn card is taken as many times as the card."""
+    n = len(y)
+    if groups is None:
+        for idx in stratified_boot_indices(y, B, seed):
+            yield _weights(idx, n)
+        return
+    rng = np.random.default_rng(seed)
+    codes, card = np.unique(groups, return_inverse=True)
+    has_fraud = np.bincount(card, weights=(np.asarray(y) == 1).astype(float), minlength=len(codes)) > 0
+    fraud_cards, clean_cards = np.where(has_fraud)[0], np.where(~has_fraud)[0]
+    for _ in range(B):
+        draw = np.concatenate([rng.choice(fraud_cards, len(fraud_cards)), rng.choice(clean_cards, len(clean_cards))])
+        mult = np.bincount(draw, minlength=len(codes)).astype(np.float64)
+        yield mult[card]
+
+
 def _metric(name, y, p, thr):
     if name == "pr_auc":
         return average_precision_score(y, p)
@@ -99,6 +120,13 @@ class _Scorer:
             prec = np.divide(tp, tp + fp, out=np.zeros_like(tp), where=(tp + fp) > 0)
             rec = tp / tp[-1]
             out["pr_auc"] = float(np.sum(np.diff(np.r_[0.0, rec]) * prec))
+        if "roc_auc" in names:  # Mann-Whitney form with ties counted as 1/2, equal to sklearn's roc_auc_score
+            ws = w[self.order]
+            tp = np.cumsum(ws * self.ys)[self.last]
+            fp = np.cumsum(ws * (1 - self.ys))[self.last]
+            wp, wn = np.diff(np.r_[0.0, tp]), np.diff(np.r_[0.0, fp])
+            neg_below = fp[-1] - fp
+            out["roc_auc"] = float(np.sum(wp * (neg_below + 0.5 * wn)) / (tp[-1] * fp[-1]))
         if "f2" in names or "mcc" in names:
             tp = float(w[self.flag & self.yb].sum()); fp = float(w[self.flag & ~self.yb].sum())
             fn = float(w[~self.flag & self.yb].sum()); tn = float(w.sum()) - tp - fp - fn
@@ -114,22 +142,22 @@ def _weights(idx, n):
     return np.bincount(idx, minlength=n).astype(np.float64)
 
 
-def bootstrap_ci(y, p, thr, metrics=("pr_auc", "f2", "mcc"), B=2000, seed=0):
+def bootstrap_ci(y, p, thr, metrics=("pr_auc", "f2", "mcc"), B=2000, seed=0, groups=None):
     sc = _Scorer(y, p, thr)
     vals = {m: [] for m in metrics}
-    for idx in stratified_boot_indices(y, B, seed):
-        r = sc.metrics(_weights(idx, len(y)), metrics)
+    for w in _boot_weights(y, B, seed, groups):
+        r = sc.metrics(w, metrics)
         for m in metrics:
             vals[m].append(r[m])
     return {m: (float(np.percentile(v, 2.5)), float(np.percentile(v, 97.5)), float(np.std(v))) for m, v in vals.items()}
 
 
-def paired_bootstrap(y, pa, ta, pb, tb, metrics=("pr_auc", "f2", "mcc"), B=2000, seed=0):
-    """Difference A - B on the same resamples. Returns mean diff, 95% CI and two-sided bootstrap p-value."""
+def paired_bootstrap(y, pa, ta, pb, tb, metrics=("pr_auc", "f2", "mcc"), B=2000, seed=0, groups=None):
+    """Difference A - B on the same resamples (rows, or whole cards when groups is given).
+    Returns mean diff, 95% CI and two-sided bootstrap p-value."""
     sa, sb = _Scorer(y, pa, ta), _Scorer(y, pb, tb)
     diffs = {m: [] for m in metrics}
-    for idx in stratified_boot_indices(y, B, seed):
-        w = _weights(idx, len(y))
+    for w in _boot_weights(y, B, seed, groups):
         ra, rb = sa.metrics(w, metrics), sb.metrics(w, metrics)
         for m in metrics:
             diffs[m].append(ra[m] - rb[m])

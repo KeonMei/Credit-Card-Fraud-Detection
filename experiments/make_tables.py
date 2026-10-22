@@ -89,7 +89,7 @@ for ds, label in DS.items():
     sheets[f"{ds}_main"] = m
     best = m.loc[m.cv_pr_auc_mean.idxmax()]
     with open(OUT / f"tab_main_{ds}.tex", "w") as f:
-        f.write("\\begin{tabular}{llcccccc}\n\\hline\nModel & Balancing & CV PR-AUC & Test PR-AUC [95\\% CI] & ROC-AUC & $F_2$ & MCC & FPR (\\%) \\\\\n\\hline\n")
+        f.write("\\begin{tabular}{llcccccc}\n\\hline\nModel & Balancing & CV PR-AUC (4 folds) & Test PR-AUC [95\\% CI] & ROC-AUC & $F_2$ & MCC & FPR (\\%) \\\\\n\\hline\n")
         for _, r in m.iterrows():
             mark = "\\textbf{" if (r.classifier == best.classifier and r.balancing == best.balancing) else "{"
             f.write(f"{r.classifier} & {r.balancing} & {mark}{r.cv_pr_auc_mean:.3f}}} $\\pm$ {r.cv_pr_auc_std:.3f} & "
@@ -120,9 +120,9 @@ for ds, label in DS.items():
     sheets[f"{ds}_rq2_rank_corr"] = pd.read_csv(T / f"{MAIN[ds]}_rq2_metric_rank_correlation.csv")
     sheets[f"{ds}_stacking_grid"] = pd.read_csv(T / f"{MAIN[ds]}_stacking_grid.csv")
     with open(OUT / f"tab_rq1_{ds}.tex", "w") as f:
-        f.write("\\begin{tabular}{llccc}\n\\hline\nModel & Balancing vs none & $\\Delta$PR-AUC [95\\% CI] & $p_{\\mathrm{Holm}}$ (PR-AUC) & $p_{\\mathrm{Holm}}$ (DeLong) \\\\\n\\hline\n")
+        f.write("\\begin{tabular}{llccc}\n\\hline\nModel & Balancing vs none & $\\Delta$PR-AUC [95\\% CI] & $p_{\\mathrm{Holm}}$ (PR-AUC) & $p_{\\mathrm{Holm}}$ (ROC-AUC) \\\\\n\\hline\n")
         for _, r in q.iterrows():
-            f.write(f"{r.classifier} & {r.balancing} & {r.d_pr_auc:+.3f} [{r.lo:+.3f}, {r.hi:+.3f}] & {pval(r.p_pr_auc_holm)} & {pval(r.p_delong_holm)} \\\\\n")
+            f.write(f"{r.classifier} & {r.balancing} & {r.d_pr_auc:+.3f} [{r.lo:+.3f}, {r.hi:+.3f}] & {pval(r.p_pr_auc_holm)} & {pval(r.p_roc_auc_holm)} \\\\\n")
         f.write("\\hline\n\\end{tabular}\n")
 
     sens = T / f"{ds}_sensitivity.csv"

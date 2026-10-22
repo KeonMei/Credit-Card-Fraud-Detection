@@ -36,10 +36,11 @@ out_dir.mkdir(parents=True, exist_ok=True)
 d = load(name)
 X, y = d["Xtr"], d["ytr"].astype(int)
 Xte, yte = d["Xte"], d["yte"].astype(int)
-sel = out_dir / "selected_features.npy"
-if sel.exists():
-    keep = np.load(sel)
-    X, Xte = X[:, keep], Xte[:, keep]
+# IEEE-CIS: features are built and selected inside each fold (prep_ieee_folds.py). The validation fold k is read
+# from cache/ieee_time_fold{k}.npz; the final model uses the selection made on the whole training period.
+PER_FOLD = name == "ieee_time"
+if PER_FOLD:
+    keep_full = np.load(out_dir / "selected_features_full.npy")
 folds = get_folds(d)
 tune_ids = list(range(5 - n_tune, 5))
 
@@ -49,9 +50,19 @@ prep_cache = {}
 
 def fold_data(k):
     if k not in prep_cache:
-        if k == "full":
+        if k == "full" and PER_FOLD:
+            Xf, Xtf = X[:, keep_full], Xte[:, keep_full]
+            pp = Prep().fit(Xf)
+            prep_cache[k] = (pp.transform(Xf), y, pp.transform(Xtf), yte)
+        elif k == "full":
             pp = Prep().fit(X)
             prep_cache[k] = (pp.transform(X), y, pp.transform(Xte), yte)
+        elif PER_FOLD:
+            z = load(f"ieee_time_fold{k}")
+            tr, va = folds[k]
+            assert np.array_equal(z["ytr"], y[tr]) and np.array_equal(z["yva"], y[va]), f"fold {k} rows differ"
+            pp = Prep().fit(z["Xtr"])
+            prep_cache[k] = (pp.transform(z["Xtr"]), y[tr], pp.transform(z["Xva"]), y[va])
         else:
             tr, va = folds[k]
             pp = Prep().fit(X[tr])

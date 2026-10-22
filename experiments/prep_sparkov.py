@@ -86,7 +86,7 @@ for k, (_, va) in enumerate(sgkf.split(np.zeros(len(idx_tr)), y[idx_tr], groups=
     fold_id[idx_tr[va]] = k
 
 np.savez_compressed(OUT / "sparkov_card.npz", Xtr=X.values[tr], ytr=y[tr], Xte=X.values[te], yte=y[te],
-                    fold_tr=fold_id[tr], groups_tr=cards[tr], feat=np.array(list(X.columns)),
+                    fold_tr=fold_id[tr], groups_tr=cards[tr], groups_te=cards[te], feat=np.array(list(X.columns)),
                     amt_te=df["amt"].values[te], cat_te=df["category"].astype(str).values[te])
 
 # ---------------------------------------------------------------- extra splits

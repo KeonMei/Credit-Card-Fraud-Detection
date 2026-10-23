@@ -2,15 +2,15 @@
 \hline
 Data & Model & Protocol & PR-AUC & ROC-AUC & Precision & Recall & MCC \\
 \hline
-ULB & XGB+none & time split (main) & 0.804 & 0.991 & 0.965 & 0.743 & 0.847 \\
-ULB & XGB+none & stratified random split & 0.818 & 0.977 & 0.986 & 0.737 & 0.852 \\
+ULB & RF+SMOTE & time split (main) & 0.799 & 0.987 & 0.727 & 0.757 & 0.742 \\
+ULB & RF+SMOTE & stratified random split & 0.792 & 0.974 & 0.804 & 0.779 & 0.791 \\
 ULB & LR+none & time split (main) & 0.791 & 0.979 & 1.000 & 0.270 & 0.520 \\
 ULB & LR+none & stratified random split & 0.682 & 0.960 & 0.830 & 0.411 & 0.583 \\
-ULB & XGB & SMOTE before split (leaky) & 1.000 & 1.000 & 1.000 & 1.000 & 1.000 \\
-IEEE-CIS & LGBM+SMOTE & time split (main) & 0.633 & 0.925 & 0.877 & 0.425 & 0.602 \\
-IEEE-CIS & LGBM+SMOTE & stratified random split & 0.902 & 0.978 & 0.969 & 0.751 & 0.848 \\
+ULB & RF & SMOTE before split (leaky) & 0.995 & 0.995 & 0.996 & 0.907 & 0.907 \\
+IEEE-CIS & LGBM+none & time split (main) & 0.634 & 0.923 & 0.885 & 0.404 & 0.590 \\
+IEEE-CIS & LGBM+none & stratified random split & 0.900 & 0.977 & 0.967 & 0.742 & 0.842 \\
 IEEE-CIS & LR+none & time split (main) & 0.361 & 0.816 & 0.767 & 0.181 & 0.364 \\
-IEEE-CIS & LR+none & stratified random split & 0.397 & 0.836 & 0.806 & 0.198 & 0.391 \\
+IEEE-CIS & LR+none & stratified random split & 0.401 & 0.837 & 0.797 & 0.199 & 0.389 \\
 IEEE-CIS & LGBM & SMOTE before split (leaky) & 1.000 & 0.999 & 0.999 & 0.992 & 0.991 \\
 Sparkov & LGBM+none & card split (main) & 0.970 & 0.999 & 0.974 & 0.887 & 0.929 \\
 Sparkov & LGBM+none & date split (last 6 months) & 0.962 & 0.999 & 0.950 & 0.887 & 0.918 \\

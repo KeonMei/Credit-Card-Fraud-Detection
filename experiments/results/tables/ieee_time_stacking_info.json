@@ -1,36 +1,36 @@
 {
   "best_config": [
     "LGBM",
-    "SMOTE"
+    "none"
   ],
   "base_models": [
     [
       "XGB",
-      "SMOTE"
+      "none"
     ],
     [
       "LGBM",
-      "SMOTE"
+      "none"
     ],
     [
       "RF",
-      "SMOTE"
+      "none"
     ],
     [
       "MLP",
-      "SMOTE"
+      "none"
     ]
   ],
   "alpha": 1.0,
-  "lam": 0.0001,
+  "lam": 0.001,
   "meta_weights": {
-    "XGB": 1.7647000551223755,
-    "LGBM": 1.527899980545044,
-    "RF": 5.292099952697754,
-    "MLP": 1.1188000440597534
+    "XGB": 1.8281999826431274,
+    "LGBM": 1.6721999645233154,
+    "RF": 1.5773999691009521,
+    "MLP": 1.162500023841858
   },
-  "meta_bias": -4.709258556365967,
-  "tau_stacking": 0.054,
-  "tau_average": 0.107,
-  "tau_best_single": 0.00063096
-}
+  "meta_bias": -3.745741844177246,
+  "tau_stacking": 0.031,
+  "tau_average": 0.051,
+  "tau_best_single": 0.00031623
+}

@@ -77,33 +77,42 @@ for ax, (name, title) in zip(axes, DS):
     fig.colorbar(im, ax=ax, fraction=0.04, label="PR-AUC")
 save(fig, "fig_heatmap_pr_auc")
 
-# 3. threshold curves for the stacking model --------------------------------
+# 3. threshold curves for the stacking model (log-scaled threshold axis) ----
+from matplotlib.lines import Line2D
 fig, axes = plt.subplots(1, NP, figsize=(3.5 * NP, 2.8))
+grid = np.logspace(-5, 0, 400)
 for ax, (name, title) in zip(axes, DS):
     f = np.load(RES / name / "final_preds.npz")
     y, p = f["yte"].astype(int), f["stack"]
-    grid = np.linspace(0.001, 0.999, 400)
-    prec, rec, f2, fpr = [], [], [], []
-    for t in grid:
-        yh = p >= t
-        tp = (yh & (y == 1)).sum(); fp = (yh & (y == 0)).sum(); fn = (~yh & (y == 1)).sum(); tn = (~yh & (y == 0)).sum()
-        pr = tp / (tp + fp) if tp + fp else 1.0
-        rc = tp / (tp + fn)
-        prec.append(pr); rec.append(rc); fpr.append(fp / (fp + tn))
-        f2.append(0 if tp == 0 else 5 * pr * rc / (4 * pr + rc))
-    ax.plot(grid, prec, label="Precision", color="#1f77b4")
-    ax.plot(grid, rec, label="Recall", color="#2ca02c")
-    ax.plot(grid, f2, label="$F_2$", color="#d62728")
-    ax.plot(grid, fpr, label="FPR", color="#7f7f7f", ls="--")
-    ax.axvline(float(f["tau_st"]), color="k", lw=0.8, ls="-.", label=f"$\\tau^*$ = {fmt_tau(f['tau_st'])}")
-    ax.axvline(0.5, color="k", lw=0.6, ls=":", label="$\\tau$ = 0.5")
-    ax.set(xlabel="Decision threshold $\\tau$", ylabel="Metric value", title=f"{title}: stacking model", ylim=(0, 1.02))
-    ax.grid(alpha=0.3, lw=0.4)
-h, l = axes[0].get_legend_handles_labels()
-fig.legend(h[:4], l[:4], loc="lower center", ncol=4, frameon=False, bbox_to_anchor=(0.5, -0.13))
-for ax in axes:
-    hh, ll = ax.get_legend_handles_labels()
-    ax.legend(hh[4:], ll[4:], frameon=True, loc="upper right", fontsize=6.5)
+    yb = y == 1
+    order = np.argsort(p)
+    ps, ys = p[order], yb[order]
+    n_pos, n_neg = int(yb.sum()), int((~yb).sum())
+    # positives/negatives with score >= t, via the sorted scores
+    pos_below = np.r_[0, np.cumsum(ys)]
+    neg_below = np.r_[0, np.cumsum(~ys)]
+    k = np.searchsorted(ps, grid, side="left")
+    tp = n_pos - pos_below[k]; fp = n_neg - neg_below[k]; fn = n_pos - tp
+    prec = np.divide(tp, tp + fp, out=np.ones(len(grid)), where=(tp + fp) > 0)
+    rec = tp / n_pos
+    fpr = fp / n_neg
+    f2 = np.divide(5 * tp, 5 * tp + 4 * fn + fp, out=np.zeros(len(grid)), where=tp > 0)
+    ax.plot(grid, prec, color="#1f77b4", lw=1.2)
+    ax.plot(grid, rec, color="#2ca02c", lw=1.2)
+    ax.plot(grid, f2, color="#d62728", lw=1.2)
+    ax.plot(grid, fpr, color="#7f7f7f", lw=1.2, ls="--")
+    ax.axvline(float(f["tau_st"]), color="k", lw=0.8, ls="-.")
+    ax.axvline(0.5, color="k", lw=0.8, ls=":")
+    ax.set_xscale("log")
+    ax.set(xlim=(1e-5, 1), ylim=(-0.02, 1.02), xlabel="Decision threshold $\\tau$ (log scale)", ylabel="Metric value",
+           title=f"{title}\nstacking, $\\tau^*$ = {fmt_tau(f['tau_st'])}")
+    ax.grid(alpha=0.3, lw=0.4, which="major")
+handles = [Line2D([], [], color="#1f77b4", lw=1.2), Line2D([], [], color="#2ca02c", lw=1.2),
+           Line2D([], [], color="#d62728", lw=1.2), Line2D([], [], color="#7f7f7f", lw=1.2, ls="--"),
+           Line2D([], [], color="k", lw=0.8, ls="-."), Line2D([], [], color="k", lw=0.8, ls=":")]
+labels = ["Precision", "Recall", "$F_2$", "FPR", "$\\tau^*$ (chosen on out-of-fold predictions)", "$\\tau$ = 0.5"]
+fig.legend(handles, labels, loc="lower center", ncol=6, frameon=False, bbox_to_anchor=(0.5, -0.12))
+fig.tight_layout()
 save(fig, "fig_threshold_curves")
 
 # 4. confusion matrices + error analysis tables -------------------------------
@@ -175,7 +184,7 @@ if rows:
         q = s[s.dataset == ds]
         x = np.arange(len(q))
         w = 0.25
-        for i, (m, lab) in enumerate([("pr_auc", "PR-AUC"), ("f1", "$F_1$ at 0.5"), ("mcc", "MCC at 0.5")]):
+        for i, (m, lab) in enumerate([("pr_auc", "PR-AUC"), ("f2", "$F_2$ at 0.5"), ("mcc", "MCC at 0.5")]):
             ax.bar(x + (i - 1) * w, q[m].values, w, label=lab)
             for xi, v in zip(x, q[m].values):
                 ax.text(xi + (i - 1) * w, v + 0.01, f"{v:.2f}", ha="center", fontsize=5.5)
@@ -184,6 +193,6 @@ if rows:
         ax.set(title=dict(DS).get(PREFIX[ds], ds), ylim=(0, 1.1), ylabel="Metric value")
         ax.grid(axis="y", alpha=0.3, lw=0.4)
     h, l = np.atleast_1d(axes)[0].get_legend_handles_labels()
-    fig.legend(h, l, loc="lower center", ncol=3, frameon=False, bbox_to_anchor=(0.5, -0.1))
+    fig.legend(h, l, loc="lower center", ncol=3, frameon=False, bbox_to_anchor=(0.5, -0.17))
     save(fig, "fig_protocol_comparison")
 print("figures done")

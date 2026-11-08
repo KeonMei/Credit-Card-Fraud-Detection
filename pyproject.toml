@@ -6,6 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "fraud-detection"
 version = "0.1.0"
 description = "Machine learning system for credit card fraud detection using transaction data"
+license = {text = "MIT"}
 requires-python = ">=3.10"
 dependencies = [
     "numpy>=1.26",

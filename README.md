@@ -156,3 +156,7 @@ ULB covers only two days of 2013 and its features are anonymised by PCA; Sparkov
 show stability rather than real bank performance. SMOTE and ENN treat encoded categories as numbers. Possible next
 steps: a larger tuning budget, SMOTE-NC for categorical features, a threshold chosen from the number of alerts a
 bank can review or from the cost of errors, and sequence models over a card's transaction history on Sparkov.
+
+## License
+
+The code is released under the [MIT License](LICENSE). The datasets are not part of this repository and keep their own licences (see [Data](#data)).
